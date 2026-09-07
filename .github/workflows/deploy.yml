@@ -1,0 +1,58 @@
+name: Task Manager CI/CD
+
+on:
+  push:
+     branches:
+      - main
+
+permissions: 
+       id-token: write
+       contents: read
+
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout source code
+          uses: actions/checkout@v6.1.0
+
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v6.2.4
+          with:
+              role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+              aws-region: ap-south-1
+
+        - name: Login to Amazon ECR
+          id: login-ecr
+          uses: aws-actions/amazon-ecr-login@v2
+
+        - name: Build and push backend image
+          env:
+             ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+             ECR_REPOSITORY: task-manager-backend
+             IMAGE_TAG: ${{ github.sha }}
+          run: |
+            docker build \
+             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+             ./backend
+
+            docker push \
+               $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+        - name: Build and push frontend image
+          env:
+            ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+            ECR_REPOSITORY: task-manager-frontend
+            IMAGE_TAG: ${{ github.sha }}
+          run: |
+            docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            ./frontend
+
+            docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+        
+          
