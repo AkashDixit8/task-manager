@@ -128,4 +128,4 @@ jobs:
           service: task-manager-frontend-service-q7o3i96d
           cluster: task-manager-cluster
           wait-for-service-stability: true
-```
+
