@@ -2,57 +2,128 @@ name: Task Manager CI/CD
 
 on:
   push:
-     branches:
+    branches:
       - main
 
-permissions: 
-       id-token: write
-       contents: read
-
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-        - name: Checkout source code
-          uses: actions/checkout@v6.1.0
 
-        - name: Configure AWS Credentials
-          uses: aws-actions/configure-aws-credentials@v6.2.4
-          with:
-              role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-              aws-region: ap-south-1
+      # ---------------- CHECKOUT ----------------
 
-        - name: Login to Amazon ECR
-          id: login-ecr
-          uses: aws-actions/amazon-ecr-login@v2
+      - name: Checkout source code
+        uses: actions/checkout@v6.1.0
 
-        - name: Build and push backend image
-          env:
-             ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-             ECR_REPOSITORY: task-manager-backend
-             IMAGE_TAG: ${{ github.sha }}
-          run: |
-            docker build \
-             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-             ./backend
 
-            docker push \
-               $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      # ---------------- AWS LOGIN ----------------
 
-        - name: Build and push frontend image
-          env:
-            ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-            ECR_REPOSITORY: task-manager-frontend
-            IMAGE_TAG: ${{ github.sha }}
-          run: |
-            docker build \
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+
+      # ---------------- ECR LOGIN ----------------
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+
+      # ---------------- BACKEND BUILD & PUSH ----------------
+
+      - name: Build and push backend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: task-manager-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            ./backend
+
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+
+      # ---------------- FRONTEND BUILD & PUSH ----------------
+
+      - name: Build and push frontend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: task-manager-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             ./frontend
 
-            docker push \
+          docker push \
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-        
-          
+
+      # ======================================================
+      #                    BACKEND ECS
+      # ======================================================
+
+      - name: Download backend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition task-manager-backend \
+            --query taskDefinition \
+            --output json > backend-task-definition.json
+
+
+      - name: Update backend task definition image
+        id: render-backend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend-task-definition.json
+          container-name: backend
+          image: ${{ steps.login-ecr.outputs.registry }}/task-manager-backend:${{ github.sha }}
+
+
+      - name: Deploy backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-backend.outputs.task-definition }}
+          service: task-manager-backend-service
+          cluster: task-manager-cluster
+          wait-for-service-stability: true
+
+
+      # ======================================================
+      #                   FRONTEND ECS
+      # ======================================================
+
+      - name: Download frontend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition task-manager-frontend \
+            --query taskDefinition \
+            --output json > frontend-task-definition.json
+
+
+      - name: Update frontend task definition image
+        id: render-frontend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-definition.json
+          container-name: frontend
+          image: ${{ steps.login-ecr.outputs.registry }}/task-manager-frontend:${{ github.sha }}
+
+
+      - name: Deploy frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-frontend.outputs.task-definition }}
+          service: task-manager-frontend-service
+          cluster: task-manager-cluster
+          wait-for-service-stability: true
