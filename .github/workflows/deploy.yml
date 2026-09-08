@@ -1,3 +1,4 @@
+```yaml
 name: Task Manager CI/CD
 
 on:
@@ -94,7 +95,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-backend.outputs.task-definition }}
-          service: task-manager-backend-service
+          service: task-manager-backend-service-94qa392e
           cluster: task-manager-cluster
           wait-for-service-stability: true
 
@@ -124,6 +125,7 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-frontend.outputs.task-definition }}
-          service: task-manager-frontend-service
+          service: task-manager-frontend-service-q7o3i96d
           cluster: task-manager-cluster
           wait-for-service-stability: true
+```
