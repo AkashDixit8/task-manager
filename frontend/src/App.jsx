@@ -7,7 +7,7 @@ function App() {
     const [title, setTitle] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const API_URL = "http://localhost:5000/api/tasks";
+    const API_URL = "/api/tasks";
 
 
     // Get tasks
